@@ -1,0 +1,121 @@
+# Google Cloud Monitoring alert policies for VisaVerse Guardian AI
+
+# High Error Rate Alert
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: visaverse-high-error-rate
+  labels:
+    app: visaverse-guardian-ai
+spec:
+  groups:
+  - name: visaverse.error_rate
+    rules:
+    - alert: HighErrorRate
+      expr: |
+        (
+          sum(rate(http_requests_total{job="visaverse-guardian-ai",code=~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="visaverse-guardian-ai"}[5m]))
+        ) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        service: visaverse-guardian-ai
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+---
+# High Latency Alert
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: visaverse-high-latency
+  labels:
+    app: visaverse-guardian-ai
+spec:
+  groups:
+  - name: visaverse.latency
+    rules:
+    - alert: HighLatency
+      expr: |
+        histogram_quantile(0.95,
+          sum(rate(http_request_duration_seconds_bucket{job="visaverse-guardian-ai"}[5m])) by (le)
+        ) > 5
+      for: 5m
+      labels:
+        severity: warning
+        service: visaverse-guardian-ai
+      annotations:
+        summary: "High latency detected"
+        description: "95th percentile latency is {{ $value }}s for the last 5 minutes"
+
+---
+# Service Down Alert
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: visaverse-service-down
+  labels:
+    app: visaverse-guardian-ai
+spec:
+  groups:
+  - name: visaverse.availability
+    rules:
+    - alert: ServiceDown
+      expr: up{job="visaverse-guardian-ai"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: visaverse-guardian-ai
+      annotations:
+        summary: "VisaVerse Guardian AI service is down"
+        description: "The service has been down for more than 1 minute"
+
+---
+# High Memory Usage Alert
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: visaverse-high-memory
+  labels:
+    app: visaverse-guardian-ai
+spec:
+  groups:
+  - name: visaverse.resources
+    rules:
+    - alert: HighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{container="visaverse-guardian-ai"} /
+          container_spec_memory_limit_bytes{container="visaverse-guardian-ai"}
+        ) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        service: visaverse-guardian-ai
+      annotations:
+        summary: "High memory usage detected"
+        description: "Memory usage is {{ $value | humanizePercentage }} of the limit"
+
+---
+# Circuit Breaker Open Alert
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: visaverse-circuit-breaker
+  labels:
+    app: visaverse-guardian-ai
+spec:
+  groups:
+  - name: visaverse.circuit_breaker
+    rules:
+    - alert: CircuitBreakerOpen
+      expr: circuit_breaker_state{state="open"} == 1
+      for: 1m
+      labels:
+        severity: warning
+        service: visaverse-guardian-ai
+      annotations:
+        summary: "Circuit breaker is open"
+        description: "Circuit breaker for {{ $labels.service_name }} is open"

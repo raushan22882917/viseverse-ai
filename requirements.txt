@@ -1,0 +1,34 @@
+# Core FastAPI dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Testing framework
+hypothesis==6.92.1
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Google Cloud Platform
+google-cloud-storage==2.10.0
+google-cloud-run==0.10.5
+google-auth==2.25.2
+
+# Document processing (PaddleOCR)
+paddlepaddle==2.5.2
+paddleocr==2.7.0.3
+
+# Graph database (Neo4j)
+neo4j==5.15.0
+
+# LLM integration (Google Gemini)
+google-generativeai==0.3.2
+
+# Memory system (MemMachine - placeholder for now)
+# Note: MemMachine integration will be added when available
+
+# Additional utilities
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiofiles==23.2.1
