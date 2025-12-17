@@ -620,10 +620,15 @@ async def get_supported_document_types():
 
 if __name__ == "__main__":
     import uvicorn
+    import os
+    
+    # Use PORT environment variable or default to 8000 for local development
+    port = int(os.getenv("PORT", "8000"))
+    
     uvicorn.run(
         "src.visaverse.api.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=settings.debug,
         log_level="info"
     )
