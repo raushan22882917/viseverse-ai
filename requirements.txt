@@ -15,8 +15,8 @@ google-cloud-run==0.10.5
 google-auth==2.25.2
 
 # Document processing (PaddleOCR)
-paddlepaddle==2.5.2
-paddleocr==2.7.0.3
+paddlepaddle
+paddleocr
 
 # Graph database (Neo4j)
 neo4j==5.15.0
