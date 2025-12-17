@@ -24,9 +24,9 @@ passlib[bcrypt]==1.7.4
 
 # Heavy ML dependencies (loaded asynchronously)
 # These will be imported dynamically to avoid blocking startup
-paddlepaddle==2.5.2
-paddleocr==2.7.0.3
-opencv-python-headless==4.8.1.78
+paddlepaddle==3.0.0
+paddleocr==2.8.1
+opencv-python-headless==4.10.0.84
 
 # Database and storage
 neo4j==5.15.0
