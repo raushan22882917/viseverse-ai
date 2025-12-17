@@ -34,8 +34,8 @@ The system follows a microservices architecture with the following components:
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd visaverse-guardian-ai
+git clone https://github.com/raushan22882917/viseverse-ai.git
+cd viseverse-ai
 ```
 
 2. Create virtual environment:
