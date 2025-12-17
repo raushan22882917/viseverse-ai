@@ -148,32 +148,127 @@ deploy_infrastructure() {
 }
 
 deploy_application() {
+    local DEPLOYMENT_TYPE=${1:-"cloudrun"}
+    
+    case $DEPLOYMENT_TYPE in
+        "cloudrun")
+            deploy_to_cloudrun
+            ;;
+        "kubernetes")
+            deploy_to_kubernetes
+            ;;
+        *)
+            log_error "Unknown deployment type: $DEPLOYMENT_TYPE"
+            exit 1
+            ;;
+    esac
+}
+
+deploy_to_cloudrun() {
     log_info "Deploying application to Cloud Run..."
     
     # Get current commit SHA
     COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "latest")
     IMAGE_TAG="gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA"
     
+    # Create secrets in Secret Manager if they don't exist
+    create_secrets_if_needed
+    
     # Deploy to Cloud Run
     gcloud run deploy $SERVICE_NAME \
         --image $IMAGE_TAG \
         --region $REGION \
         --platform managed \
-        --port 8000 \
+        --port 8080 \
         --memory 2Gi \
         --cpu 2 \
         --min-instances 1 \
         --max-instances 10 \
         --concurrency 80 \
         --timeout 300 \
-        --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,LOG_LEVEL=INFO" \
+        --set-env-vars "GCP_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=cloudrun,LOG_LEVEL=INFO,GCP_REGION=$REGION" \
+        --set-secrets "GEMINI_API_KEY=gemini-api-key:latest,NEO4J_PASSWORD=neo4j-password:latest,GOOGLE_API_KEY=google-api-key:latest" \
         --allow-unauthenticated
     
     # Get service URL
     SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format="value(status.url)")
     
-    log_info "Application deployment completed."
+    log_info "Cloud Run deployment completed."
     log_info "Service URL: $SERVICE_URL"
+}
+
+deploy_to_kubernetes() {
+    log_info "Deploying application to Kubernetes..."
+    
+    # Check if kubectl is available
+    if ! command -v kubectl &> /dev/null; then
+        log_error "kubectl is not installed. Please install it first."
+        exit 1
+    fi
+    
+    # Get current commit SHA
+    COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "latest")
+    IMAGE_TAG="gcr.io/$PROJECT_ID/$SERVICE_NAME:$COMMIT_SHA"
+    
+    # Update deployment YAML with correct image and project ID
+    sed -i.bak "s|gcr.io/PROJECT_ID/visaverse-guardian-ai:latest|$IMAGE_TAG|g" k8s/deployment.yaml
+    sed -i.bak "s|PROJECT_ID|$PROJECT_ID|g" k8s/deployment.yaml
+    
+    # Create namespace if it doesn't exist
+    kubectl create namespace visaverse --dry-run=client -o yaml | kubectl apply -f -
+    
+    # Create secrets
+    create_k8s_secrets
+    
+    # Apply deployment
+    kubectl apply -f k8s/deployment.yaml -n visaverse
+    
+    # Wait for deployment to be ready
+    kubectl rollout status deployment/visaverse-guardian-ai -n visaverse --timeout=300s
+    
+    # Get service URL (if using ingress)
+    log_info "Kubernetes deployment completed."
+    log_info "Check service status with: kubectl get pods -n visaverse"
+    
+    # Restore original deployment file
+    mv k8s/deployment.yaml.bak k8s/deployment.yaml
+}
+
+create_secrets_if_needed() {
+    log_info "Creating secrets in Secret Manager..."
+    
+    # List of secrets to create
+    declare -A secrets=(
+        ["gemini-api-key"]="your-gemini-api-key-here"
+        ["neo4j-password"]="your-neo4j-password-here"
+        ["google-api-key"]="your-google-api-key-here"
+    )
+    
+    for secret_name in "${!secrets[@]}"; do
+        if ! gcloud secrets describe $secret_name &>/dev/null; then
+            log_info "Creating secret: $secret_name"
+            echo -n "${secrets[$secret_name]}" | gcloud secrets create $secret_name --data-file=-
+            log_warn "Please update the secret '$secret_name' with the actual value:"
+            log_warn "echo -n 'actual-secret-value' | gcloud secrets versions add $secret_name --data-file=-"
+        else
+            log_info "Secret $secret_name already exists"
+        fi
+    done
+}
+
+create_k8s_secrets() {
+    log_info "Creating Kubernetes secrets..."
+    
+    # Create secret for API keys (you should replace these with actual values)
+    kubectl create secret generic visaverse-secrets \
+        --from-literal=gemini-api-key="your-gemini-api-key" \
+        --from-literal=neo4j-password="your-neo4j-password" \
+        --from-literal=google-api-key="your-google-api-key" \
+        --namespace=visaverse \
+        --dry-run=client -o yaml | kubectl apply -f -
+    
+    log_warn "Please update the Kubernetes secrets with actual values:"
+    log_warn "kubectl patch secret visaverse-secrets -n visaverse -p='{\"data\":{\"gemini-api-key\":\"<base64-encoded-key>\"}}'"
 }
 
 run_health_check() {
@@ -243,6 +338,7 @@ main() {
     SKIP_INFRA=false
     SKIP_BUILD=false
     SKIP_DEPLOY=false
+    DEPLOYMENT_TYPE="cloudrun"
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -258,13 +354,23 @@ main() {
                 SKIP_DEPLOY=true
                 shift
                 ;;
+            --type)
+                DEPLOYMENT_TYPE="$2"
+                shift 2
+                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo "Options:"
+                echo "  --type TYPE    Deployment type: cloudrun (default) or kubernetes"
                 echo "  --skip-infra   Skip infrastructure deployment"
                 echo "  --skip-build   Skip Docker image build"
                 echo "  --skip-deploy  Skip application deployment"
                 echo "  --help         Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                           # Deploy to Cloud Run"
+                echo "  $0 --type kubernetes         # Deploy to Kubernetes"
+                echo "  $0 --skip-infra --skip-build # Only deploy application"
                 exit 0
                 ;;
             *)
@@ -287,10 +393,12 @@ main() {
     fi
     
     if [ "$SKIP_DEPLOY" = false ]; then
-        deploy_application
-        run_health_check
-        setup_monitoring
-        cleanup_old_images
+        deploy_application $DEPLOYMENT_TYPE
+        if [ "$DEPLOYMENT_TYPE" = "cloudrun" ]; then
+            run_health_check
+            setup_monitoring
+            cleanup_old_images
+        fi
     fi
     
     log_info "Deployment completed successfully!"
