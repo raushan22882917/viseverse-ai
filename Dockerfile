@@ -51,6 +51,19 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Pre-download PaddleOCR models to speed up first startup
+RUN python -c "
+import paddleocr
+import logging
+logging.getLogger().setLevel(logging.ERROR)
+try:
+    # Pre-download English models
+    ocr = paddleocr.PaddleOCR(lang='en', show_log=False)
+    print('PaddleOCR English models downloaded')
+except Exception as e:
+    print(f'Model download failed: {e}')
+" || echo "Model pre-download failed, will download on first use"
+
 # Copy source code
 COPY src/ ./src/
 COPY tests/ ./tests/

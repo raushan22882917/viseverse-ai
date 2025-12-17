@@ -77,25 +77,34 @@ class PaddleOCRDocumentProcessor(DocumentProcessingService):
         }
     
     def _get_ocr_engine(self, lang: str = None) -> paddleocr.PaddleOCR:
-        """Get or create OCR engine instance."""
+        """Get or create OCR engine instance with optimized initialization."""
         if self._ocr_engine is None:
             use_lang = lang if lang in self._supported_languages else self.default_lang
+            logger.info(f"Initializing PaddleOCR engine for language: {use_lang}")
+            
             try:
-                # Try with newer parameter names first
+                # Optimized configuration for faster startup
                 self._ocr_engine = paddleocr.PaddleOCR(
-                    use_textline_orientation=True,
-                    lang=use_lang
+                    use_angle_cls=True,
+                    lang=use_lang,
+                    use_gpu=self.use_gpu,
+                    show_log=False,  # Reduce logging overhead
+                    drop_score=0.5   # Filter low-confidence results early
                 )
-            except Exception:
+                logger.info("PaddleOCR engine initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize PaddleOCR with full config: {e}")
                 try:
-                    # Fallback to older parameter names
+                    # Minimal fallback configuration
                     self._ocr_engine = paddleocr.PaddleOCR(
-                        use_angle_cls=True,
-                        lang=use_lang
+                        lang=use_lang,
+                        show_log=False
                     )
-                except Exception:
-                    # Minimal configuration as last resort
-                    self._ocr_engine = paddleocr.PaddleOCR(lang=use_lang)
+                    logger.info("PaddleOCR engine initialized with minimal config")
+                except Exception as e2:
+                    logger.error(f"Failed to initialize PaddleOCR: {e2}")
+                    raise RuntimeError(f"Could not initialize PaddleOCR: {e2}")
+        
         return self._ocr_engine
     
     async def process_documents(
