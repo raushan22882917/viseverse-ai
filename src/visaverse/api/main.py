@@ -302,8 +302,8 @@ app = FastAPI(
     version=settings.version,
     description="AI-driven global mobility intelligence platform",
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None
+    docs_url="/docs",  # Always enable docs for testing
+    redoc_url="/redoc"  # Always enable redoc for testing
 )
 
 # Add middleware
@@ -433,7 +433,7 @@ async def root():
         "message": "Welcome to VisaVerse Guardian AI",
         "version": settings.version,
         "description": "AI-driven global mobility intelligence platform",
-        "docs": "/docs" if settings.debug else "Documentation not available in production",
+        "docs": "/docs",
         "health": "/health",
         "endpoints": {
             "process_application": "/api/v1/applications/process",
